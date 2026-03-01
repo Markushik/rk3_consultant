@@ -1,0 +1,47 @@
+[
+  {
+    "USER_ID": 878406427,
+    "DAY": "MONDAY",
+    "MINUTES": 3,
+    "GROUP": "RKT3",
+    "SURNAME": "Zem",
+    "MARKED": true,
+    "MARKED_BY": 878406427
+  },
+  {
+    "USER_ID": 878406427,
+    "DAY": "WEDNESDAY",
+    "MINUTES": 14,
+    "GROUP": "RKT3",
+    "SURNAME": "Zem",
+    "MARKED": true,
+    "MARKED_BY": 878406427
+  },
+  {
+    "USER_ID": 878406427,
+    "DAY": "MONDAY",
+    "MINUTES": 4,
+    "GROUP": "RKT3",
+    "SURNAME": "Zem",
+    "MARKED": true,
+    "MARKED_BY": 878406427
+  },
+  {
+    "USER_ID": 878406427,
+    "DAY": "MONDAY",
+    "MINUTES": 25,
+    "GROUP": "RKT3",
+    "SURNAME": "Zem",
+    "MARKED": true,
+    "MARKED_BY": 878406427
+  },
+  {
+    "USER_ID": 878406427,
+    "DAY": "MONDAY",
+    "MINUTES": 4,
+    "GROUP": "RKT3",
+    "SURNAME": "Zem",
+    "MARKED": true,
+    "MARKED_BY": 878406427
+  }
+]
