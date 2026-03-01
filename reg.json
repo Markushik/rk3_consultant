@@ -5,7 +5,17 @@
     "GROUP": "РКТ3-61",
     "MILITARY": "YES",
     "REDUCTOR": "Червячный",
-    "CONSULT_1": null,
-    "CONSULT_2": null
+    "CONSULT_1": "TUESDAY",
+    "CONSULT_2": "FRIDAY",
+    "LOCKED": true
+  },
+  "1219381277": {
+    "USER_ID": 1219381277,
+    "SURNAME": "Антипов",
+    "GROUP": "РКТ4-61",
+    "MILITARY": "NO",
+    "REDUCTOR": "Цилиндрическией",
+    "CONSULT_1": "WEDNESDAY",
+    "CONSULT_2": "FRIDAY"
   }
 }

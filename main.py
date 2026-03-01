@@ -184,44 +184,6 @@ async def ensure_groups_store():
     return g
 
 
-async def create_group(day_key: str, reductor: str, first_uid: int, second_uid: int) -> str:
-    store = await ensure_groups_store()
-    gid = str(store["next_id"])
-    store["next_id"] = int(store["next_id"]) + 1
-    store["groups"][gid] = {"DAY": day_key, "REDUCTOR": reductor, "MEMBERS": [first_uid, second_uid]}
-    await write_json(GROUPS_PATH, store)
-    return gid
-
-
-async def add_to_group(gid: str, uid: int):
-    store = await ensure_groups_store()
-    g = store["groups"].get(gid)
-    if not g:
-        return False
-    if uid not in g["MEMBERS"]:
-        g["MEMBERS"].append(uid)
-    store["groups"][gid] = g
-    await write_json(GROUPS_PATH, store)
-    return True
-
-
-async def set_queue_group_id(user_id: int, slot: str, gid: str):
-    q = await read_json(QUEUE_PATH, [])
-    for x in q:
-        if x.get("USER_ID") == user_id and x.get("SLOT") == slot:
-            x["GROUP_ID"] = gid
-            break
-    await write_json(QUEUE_PATH, q)
-
-
-async def get_queue_entry(user_id: int, slot: str):
-    q = await read_json(QUEUE_PATH, [])
-    for x in q:
-        if x.get("USER_ID") == user_id and x.get("SLOT") == slot:
-            return x
-    return None
-
-
 async def find_group_candidate(day_key: str, reductor: str, current_uid: int):
     q = await read_json(QUEUE_PATH, [])
     for x in q:
@@ -242,38 +204,25 @@ async def flatten_unmarked_queue():
     return [x for x in q if x.get("DAY") in DAYS and not x.get("MARKED")]
 
 
-async def mark_entry(entry: dict, *, marked_by: int):
+async def mark_entry_self(user_id: int, slot: str, *, marked_by: int):
     q = await read_json(QUEUE_PATH, [])
-    uid = int(entry.get("USER_ID") or 0)
-    slot = entry.get("SLOT")
-    gid = entry.get("GROUP_ID")
-
     now = datetime.now(timezone.utc).isoformat()
     changed = False
     marked_batch = []
 
-    if gid:
-        for x in q:
-            if x.get("MARKED"):
-                continue
-            if x.get("DAY") != entry.get("DAY"):
-                continue
-            if x.get("GROUP_ID") != gid:
-                continue
-            x["MARKED"] = True
-            x["MARKED_BY"] = marked_by
-            x["MARKED_AT"] = now
-            changed = True
-            marked_batch.append(x)
-    else:
-        for x in q:
-            if x.get("USER_ID") == uid and x.get("SLOT") == slot and not x.get("MARKED"):
-                x["MARKED"] = True
-                x["MARKED_BY"] = marked_by
-                x["MARKED_AT"] = now
-                changed = True
-                marked_batch.append(x)
-                break
+    for x in q:
+        if x.get("MARKED"):
+            continue
+        if int(x.get("USER_ID") or 0) != int(user_id):
+            continue
+        if (x.get("SLOT") or "") != (slot or ""):
+            continue
+        x["MARKED"] = True
+        x["MARKED_BY"] = marked_by
+        x["MARKED_AT"] = now
+        changed = True
+        marked_batch.append(x)
+        break
 
     if changed:
         await write_json(QUEUE_PATH, q)
@@ -416,6 +365,7 @@ async def finish_reg(callback: CallbackQuery, manager: DialogManager):
         "GROUP": manager.dialog_data.get("GROUP"),
         "MILITARY": manager.dialog_data.get("MILITARY"),
         "REDUCTOR": manager.dialog_data.get("REDUCTOR"),
+        "LOCKED": False,
         SLOT_1: None,
         SLOT_2: None,
     }
@@ -445,6 +395,7 @@ async def on_refresh(callback: CallbackQuery, button: Button, manager: DialogMan
 
 async def menu_getter(dialog_manager: DialogManager, **kwargs):
     u = await get_user(dialog_manager.event.from_user.id) or {}
+
     c1 = u.get(SLOT_1)
     c2 = u.get(SLOT_2)
 
@@ -464,6 +415,8 @@ async def menu_getter(dialog_manager: DialogManager, **kwargs):
         ]
     )
 
+    locked = bool(u.get("LOCKED"))
+
     text = (
         "<b>Ваши консультации:</b>\n\n"
         f"1. {day_title(c1) if c1 else '—'}\n"
@@ -473,7 +426,7 @@ async def menu_getter(dialog_manager: DialogManager, **kwargs):
         f"<pre>{pre}</pre>\n\n"
         "👇 <b>Выберите</b> консультацию:"
     )
-    return {"MENU_TEXT": text}
+    return {"MENU_TEXT": text, "LOCKED": locked}
 
 
 async def group_offer_getter(dialog_manager: DialogManager, **kwargs):
@@ -495,11 +448,21 @@ async def group_offer_getter(dialog_manager: DialogManager, **kwargs):
 
 
 async def pick_c1(callback: CallbackQuery, button: Button, manager: DialogManager):
+    u = await get_user(callback.from_user.id) or {}
+    if u.get("LOCKED"):
+        await callback.message.answer("<b>⚠️ Предупреждение</b> • Вы уже закрыли консультацию — перезапись запрещена")
+        await manager.start(UserMenu.MENU, mode=StartMode.RESET_STACK, show_mode=ShowMode.DELETE_AND_SEND)
+        return
     manager.dialog_data["SLOT"] = SLOT_1
     await manager.switch_to(UserMenu.PICK_DAY)
 
 
 async def pick_c2(callback: CallbackQuery, button: Button, manager: DialogManager):
+    u = await get_user(callback.from_user.id) or {}
+    if u.get("LOCKED"):
+        await callback.message.answer("<b>⚠️ Предупреждение</b> • Вы уже закрыли консультацию — перезапись запрещена")
+        await manager.start(UserMenu.MENU, mode=StartMode.RESET_STACK, show_mode=ShowMode.DELETE_AND_SEND)
+        return
     manager.dialog_data["SLOT"] = SLOT_2
     await manager.switch_to(UserMenu.PICK_DAY)
 
@@ -508,6 +471,9 @@ async def set_slot_day(user_id: int, slot: str, day_key: str):
     u = await get_user(user_id)
     if not u:
         return False, "<b>❌ Ошибка</b> • Сначала выполните /start", None
+
+    if u.get("LOCKED"):
+        return False, "<b>⚠️ Предупреждение</b> • Вы уже закрыли консультацию — перезапись запрещена", None
 
     if slot not in (SLOT_1, SLOT_2) or day_key not in DAYS:
         return False, "<b>❌ Ошибка</b> • Неверный выбор", None
@@ -604,16 +570,8 @@ async def clear_slot(user_id: int, slot: str):
     if not u:
         return False, "<b>❌ Ошибка</b> • Сначала выполните /start"
 
-    if is_military_user(u):
-        other_slot = SLOT_2 if slot == SLOT_1 else SLOT_1
-        other_day = u.get(other_slot)
-        this_day = u.get(slot)
-        if this_day == "TUESDAY" and other_day in ("WEDNESDAY", "FRIDAY"):
-            return (
-                False,
-                "<b>⚠️ Предупреждение</b> • Студентам военной кафедры доступна связка только с <code>вторником</code>.\n"
-                "Сначала переназначьте вторую консультацию.",
-            )
+    if u.get("LOCKED"):
+        return False, "<b>⚠️ Предупреждение</b> • После закрытия консультации удаление/перезапись запрещены"
 
     await remove_slot_from_queue(user_id, slot)
 
@@ -637,34 +595,6 @@ async def del_c2(callback: CallbackQuery, button: Button, manager: DialogManager
 
 
 async def offer_yes(callback: CallbackQuery, button: Button, manager: DialogManager):
-    day_key = manager.dialog_data.get("OFFER_DAY")
-    red = manager.dialog_data.get("OFFER_RED")
-    cand_uid = int(manager.dialog_data.get("OFFER_CAND_UID") or 0)
-    cand_slot = manager.dialog_data.get("OFFER_CAND_SLOT")
-    my_slot = manager.dialog_data.get("OFFER_MY_SLOT")
-
-    if not (day_key and red and cand_uid and cand_slot and my_slot):
-        await callback.message.answer("<b>❌ Ошибка</b> • Не удалось создать группу")
-        await manager.start(UserMenu.MENU, mode=StartMode.RESET_STACK, show_mode=ShowMode.DELETE_AND_SEND)
-        return
-
-    cand_entry = await get_queue_entry(cand_uid, cand_slot)
-    my_entry = await get_queue_entry(callback.from_user.id, my_slot)
-
-    if not cand_entry or not my_entry:
-        await callback.message.answer("<b>⚠️ Предупреждение</b> • Кто-то уже сменил запись")
-        await manager.start(UserMenu.MENU, mode=StartMode.RESET_STACK, show_mode=ShowMode.DELETE_AND_SEND)
-        return
-
-    if cand_entry.get("GROUP_ID"):
-        gid = cand_entry.get("GROUP_ID")
-        await add_to_group(gid, callback.from_user.id)
-    else:
-        gid = await create_group(day_key, red, cand_uid, callback.from_user.id)
-
-    await set_queue_group_id(cand_uid, cand_slot, gid)
-    await set_queue_group_id(callback.from_user.id, my_slot, gid)
-
     await callback.message.answer("<b>✅ Успех</b> • Группа сформирована")
     await callback.message.answer(await queues_html())
     await manager.start(UserMenu.MENU, mode=StartMode.RESET_STACK, show_mode=ShowMode.DELETE_AND_SEND)
@@ -677,16 +607,25 @@ async def offer_no(callback: CallbackQuery, button: Button, manager: DialogManag
 
 
 async def mark_list_getter(dialog_manager: DialogManager, **kwargs):
-    items = []
+    uid = dialog_manager.event.from_user.id
     q = await flatten_unmarked_queue()
-    for x in q:
-        uid = int(x.get("USER_ID") or 0)
+    mine = [x for x in q if int(x.get("USER_ID") or 0) == int(uid)]
+
+    day_counts = defaultdict(int)
+    for x in mine:
+        day_counts[x.get("DAY")] += 1
+
+    items = []
+    for x in mine:
         slot = x.get("SLOT") or ""
         key = f"{uid}:{slot}"
-        title = f"{day_title(x.get('DAY'))} • {esc(x.get('GROUP'))} — {esc(x.get('SURNAME'))}"
+        d = x.get("DAY")
+        title = day_title(d)
+        if day_counts.get(d, 0) > 1:
+            title = f"{title} ({slot_short(slot)})"
         items.append({"id": key, "title": title})
 
-    text = "<b>✅ Закрыть консультацию</b>\n\n" + ("Выберите запись:" if items else "Очередь пуста.")
+    text = "<b>✅ Закрыть консультацию</b>\n\n" + ("Выберите день:" if items else "У вас нет активных записей.")
     return {"MARK_TEXT": text, "MARK_ITEMS": items}
 
 
@@ -705,14 +644,19 @@ async def mark_yes(callback: CallbackQuery, button: Button, manager: DialogManag
         await manager.start(MarkMenu.LIST, mode=StartMode.RESET_STACK, show_mode=ShowMode.DELETE_AND_SEND)
         return
 
-    entry = await get_queue_entry(uid, slot)
-    if not entry or entry.get("MARKED"):
-        await callback.message.answer("<b>⚠️ Предупреждение</b> • Эта запись уже закрыта")
+    if uid != callback.from_user.id:
+        await callback.message.answer("<b>❌ Ошибка</b> • Можно закрыть только свою консультацию")
         await manager.start(MarkMenu.LIST, mode=StartMode.RESET_STACK, show_mode=ShowMode.DELETE_AND_SEND)
         return
 
-    ok = await mark_entry(entry, marked_by=callback.from_user.id)
+    ok = await mark_entry_self(uid, slot, marked_by=callback.from_user.id)
     if ok:
+        db = await read_json(REG_PATH, {})
+        u = db.get(str(uid), {})
+        u["LOCKED"] = True
+        db[str(uid)] = u
+        await write_json(REG_PATH, db)
+
         await callback.message.answer("<b>✅ Успех</b> • Консультация закрыта")
     else:
         await callback.message.answer("<b>⚠️ Предупреждение</b> • Не удалось закрыть (уже закрыто)")

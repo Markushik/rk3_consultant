@@ -11,5 +11,44 @@
     "MARKED": true,
     "MARKED_BY": 878406427,
     "MARKED_AT": "2026-03-01T22:07:43.680600+00:00"
+  },
+  {
+    "USER_ID": 1219381277,
+    "SLOT": "CONSULT_1",
+    "DAY": "WEDNESDAY",
+    "MINUTES": 15,
+    "GROUP": "РКТ4-61",
+    "SURNAME": "Антипов",
+    "MILITARY": "NO",
+    "REDUCTOR": "Цилиндрическией",
+    "MARKED": true,
+    "MARKED_BY": 878406427,
+    "MARKED_AT": "2026-03-01T22:30:41.235105+00:00"
+  },
+  {
+    "USER_ID": 878406427,
+    "SLOT": "CONSULT_1",
+    "DAY": "TUESDAY",
+    "MINUTES": 15,
+    "GROUP": "РКТ3-61",
+    "SURNAME": "Землянских",
+    "MILITARY": "YES",
+    "REDUCTOR": "Червячный",
+    "MARKED": true,
+    "MARKED_BY": 878406427,
+    "MARKED_AT": "2026-03-01T22:34:41.361105+00:00"
+  },
+  {
+    "USER_ID": 878406427,
+    "SLOT": "CONSULT_1",
+    "DAY": "TUESDAY",
+    "MINUTES": 15,
+    "GROUP": "РКТ3-61",
+    "SURNAME": "Землянских",
+    "MILITARY": "YES",
+    "REDUCTOR": "Червячный",
+    "MARKED": true,
+    "MARKED_BY": 878406427,
+    "MARKED_AT": "2026-03-01T22:42:51.535592+00:00"
   }
 ]
